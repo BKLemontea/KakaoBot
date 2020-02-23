@@ -1,6 +1,6 @@
 const scriptName="Nico.js";
 const ROOMS = "PNN 공부합시다"; //방 이름
-const VER = "ver 1.3.1"; // 버전
+const VER = "ver 1.4"; // 버전
 const TIME = 60 * 5; //알람 주기
 var ROOM2;
 var REPLIER2;
@@ -26,8 +26,6 @@ const CANCEL = NICO + "예약취소";
 const CANCEL_ALL = NICO + "모든예약취소";
 
 const LIST = NICO + "리스트";
-
-const EXIT = NICO + "종료";
 const RESTART =  NICO + "재시작";
 
 var currentDay; // 현재 날짜
@@ -252,7 +250,10 @@ function cancelReservationAll(sender) {
             cancelReservAll = true;
         }
     }
-    return cancelReservAll;
+    if(cancelReservAll === true){
+       return "[" + sender + "]님의 모든 예약을 취소했습니다.";
+    }
+    return "[" + sender + "]님의 예약이 존재하지않습니다.";
  }
 
  // 예약 리스트 보여주기
@@ -266,199 +267,208 @@ function reservationList() {
        }
        if(reservations[i].name !== "None"){
            str += ": " + reservations[i].name;  
-           if(reservations[i].status === 1){str += " [★사용중★]";}
-           else if(reservations[i].status === 2){ str += " [사용완료]";}
-           else if(reservations[i].status === 3){ str += " [마감]";}
+           if(reservations[i].status === 1){str += " [★로그인★]";}
+           else if(reservations[i].status === 2){ str += " [로그아웃]";}
+           else if(reservations[i].status === 3){ str += " [시간만료]";}
        }
     }
     return str;
  }
 
 // 메시지
- function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId){
+function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId){
+   if(room === ROOMS){
+       ROOM2 = room;
+       REPLIER2 = replier;
+    }
+
     if(room === ROOMS){
-        ROOM2 = room;
-        REPLIER2 = replier;
-     }
+       if(flag === true) { // 최초 실행시 실행됨
+          init(true);
+          flag = false;
 
-     if(room === ROOMS){
-        if(flag === true) { // 최초 실행시 실행됨
-           init(true);
-           flag = false;
+          startTimer = setInterval(function(){
+             var day = new Date();
+             currentHour = day.getHours();
+             reservationUser = reservations[currentHour].name;
+             timeOut(currentHour); //마감 확인
 
-           startTimer = setInterval(function(){
-              var day = new Date();
-              currentHour = day.getHours();
-              reservationUser = reservations[currentHour].name;
-              timeOut(currentHour); //마감 확인
+             if(currentLoginUser !== "None" && reservationUser === "None"){
+                reserv(currentLoginUser, currentHour, currentHour);
+                replier.reply("[" + currentLoginUser + "]님의 예약 시간을 1시간 연장했습니다.");
+             }
 
-              if(count === TIME){
-                 count = 0;
+             if(reservationUser !== "None" && currentLoginUser !== reservationUser){
+               if(count === TIME){
+                  count = 0;
                   if(currentLoginUser !== "None" && reservationUser !== "None" && reservationUser !== currentLoginUser){
                      REPLIER2.reply(ROOM2, "[알림]\n다음 예약자[" + reservationUser + "]님이 기다리고 있습니다.");
                   }
-              }
-              count++;
+               }
+               count++;
+             }
 
-              if(currentDay !== day.getDate()){ // 날짜 변경을 확인하여 정보 초기화
-                REPLIER2.reply(ROOM2, day.getMonth()+1 + "/" + currentDay + "일자 예약 리스트를 초기화합니다.");
-                init(false, replier);
-              }
-           }, 1000);
-        }
-  
-           if(msg === LOGIN){
-              replier.reply(useNico(sender));
+             if(currentDay !== day.getDate()){ // 날짜 변경을 확인하여 정보 초기화
+               REPLIER2.reply(ROOM2, day.getMonth()+1 + "/" + currentDay + "일자 예약 리스트를 초기화합니다.");
+               init(false);
+               save(SDCARD, FILENAME, reservations);
+             }
+          }, 1000);
+       }
+ 
+          if(msg === LOGIN){
+             replier.reply(useNico(sender));
+          }
+ 
+          if(msg === LOGOUT ){
+             replier.reply(stopNico(sender));
+          }
+ 
+          if(msg === LIST) { // 리스트 보여주기
+             replier.reply(reservationList());
+          }
+          
+          // 모든예약취소
+          if(msg === CANCEL_ALL) { 
+            replier.reply(cancelReservationAll(sender));
+          }
+          
+          // 예약취소
+          if(msg.indexOf(CANCEL) !== -1) { 
+             const cutMsg_s = msg.split(' ');
+             const timeMsg_s = parseInt(cutMsg_s[2].replace(/[^0-9]/g,""));
+             replier.reply(cancelReservation(sender, timeMsg_s, false));
+          }
+          
+          // 현재 시간 예약
+          if(msg.indexOf(RESERVATION_NOW) !== -1) { //니꼬 납치
+           if(msg.split(' ')[2] === undefined){
+             replier.reply(reserv(sender, currentHour, currentHour));
+           }else{
+              const addTime = parseInt(msg.split(' ')[2].replace(/[^0-9]/g,""));
+              replier.reply(reserv(sender, currentHour, (currentHour + addTime - 1)));
            }
-  
-           if(msg === LOGOUT ){
-              replier.reply(stopNico(sender));
-           }
-  
-           if(msg === LIST) { // 리스트 보여주기
-              replier.reply(reservationList());
-           }
-           
-           // 모든예약취소
-           if(msg === CANCEL_ALL) { 
-              if(cancelReservationAll(sender) === true){
-                 replier.reply("[" + sender + "]님의 모든 예약을 취소했습니다.");
-              } else {
-                 replier.reply("[" + sender + "]님의 예약이 존재하지않습니다.");
-              }
-           }
-           
-           // 예약취소
-           if(msg.indexOf(CANCEL) !== -1) { 
-              const cutMsg_s = msg.split(' ');
-              const timeMsg_s = parseInt(cutMsg_s[2].replace(/[^0-9]/g,""));
-              replier.reply(cancelReservation(sender, timeMsg_s, false));
-           }
-           
-           // 현재 시간 예약
-           if(msg.indexOf(RESERVATION_NOW) !== -1) { //니꼬 납치
-            if(msg.split(' ')[2] === undefined){
-              replier.reply(reserv(sender, currentHour, currentHour));
-            }else{
-               const nowTime = parseInt(msg.split(' ')[2].replace(/[^0-9]/g,""));
-               replier.reply(reserv(sender, currentHour, (currentHour + nowTime - 1)));
-            }
-           }
-  
-           // 단일 & 다중 시간 예약
-           if(msg.indexOf(RESERVATION) !== -1 && msg.indexOf("취소") === -1 && msg.indexOf("업데이트") === -1) { 
-              const cutMsg = msg.split(' ');
-              try{
-                 const timeMsg_b = cutMsg[2].split('~');
-                 if(timeMsg_b[1] !== undefined){ // 다중 시간 예약
-                 const startTime = parseInt(timeMsg_b[0].replace(/[^0-9]/g,""));
-                 const endTime = parseInt(timeMsg_b[1].replace(/[^0-9]/g,""));
-                 replier.reply(reserv(sender, startTime, endTime));
-                 } else { // 단일 시간 예약
-                    const timeMsg = parseInt(cutMsg[2].replace(/[^0-9]/g,""));
-                    replier.reply(reserv(sender, timeMsg, timeMsg));
+          }
+ 
+          // 단일 & 다중 시간 예약
+          if(msg.indexOf(RESERVATION) !== -1 && msg.indexOf("취소") === -1 && msg.indexOf("업데이트") === -1) { 
+             const cutMsg = msg.split(' ');
+             try{
+                const timeMsg_b = cutMsg[2].split('~');
+                if(timeMsg_b[1] !== undefined){ // 다중 시간 예약
+                const startTime = parseInt(timeMsg_b[0].replace(/[^0-9]/g,""));
+                const endTime = parseInt(timeMsg_b[1].replace(/[^0-9]/g,""));
+                replier.reply(reserv(sender, startTime, endTime));
+                } else { // 단일 시간 예약
+                   const timeMsg = parseInt(cutMsg[2].replace(/[^0-9]/g,""));
+                   replier.reply(reserv(sender, timeMsg, timeMsg));
+                }
+             } catch(e) {
+                replier.reply(e);
+             }
+          }
+          
+          // 재시작
+          if(msg === RESTART) {
+             replier.reply("니꼬 재시작 합니다.");
+             Api.off(scriptName);
+             Api.reload(scriptName);
+             Api.on(scriptName);
+          }
+          
+          // 도움말
+          if(msg === HELP || msg === "/니꼬"){ // 도움말
+                var help = "[명령어] " + VER + "\n"
+                 + "--------------------\n"
+                 + "현재시간이 포함되어있다면 바로 로그인됩니다.\n" 
+                 + RESERVATION_NOW + " : 현재시간 예약\n" 
+                 + RESERVATION_NOW + " 2시간 : 현재시간부터 2시간 예약\n" 
+                 + RESERVATION + " 0시\n" 
+                 + RESERVATION + " 0시~2시\n" 
+                 + "--------------------\n"
+                 + "예약시간보다 일찍 로그아웃한 경우 이후 시간은 예약취소됩니다.\n"
+                 + LOGIN + "\n"
+                 + LOGOUT + "\n"
+                 + "--------------------\n"
+                 + CANCEL + " 0시\n"  
+                 + CANCEL_ALL + "\n" 
+                 + "--------------------\n"
+                 + LIST + "\n" 
+                 + RESTART + " : 문제발생시 사용\n" 
+                 + HELP + " or /니꼬";
+             replier.reply(help);
+          }
+
+          if(sender === MANAGER){
+           if(msg === "/저장"){
+                 if(save(SDCARD, FILENAME, reservations) === true){
+                    replier.reply("저장 성공");
+                 }else{
+                    replier.reply("저장 실패");
                  }
-              } catch(e) {
-                 replier.reply(e);
               }
-           }
-           
-           // 종료
-           if(msg === EXIT) {
-              try{
-                 clearInterval(startTimer);
-                 init(false);
-                 Api.off(scriptName);
-                 Api.reload(scriptName);
-                 replier.reply("정상적으로 종료하였습니다."); 
-              }catch(e){
-                 replier.reply(e);
-              }
-           }
-           
-           // 재시작
-           if(msg === RESTART) {
-              replier.reply("니꼬 재시작 합니다.");
-              Api.off(scriptName);
-              Api.reload(scriptName);
-              Api.on(scriptName);
-           }
-           
-           // 도움말
-           if(msg === HELP || msg === "/니꼬"){ // 도움말
-                 var help = "[명령어] " + VER + "\n"
-                  + "--------------------\n"
-                  + "현재시간이 포함되어있다면 바로 로그인됩니다.\n" 
-                  + RESERVATION_NOW + " : 현재시간 예약\n" 
-                  + RESERVATION_NOW + " 2시간 : 현재시간부터 2시간 예약\n" 
-                  + RESERVATION + " 0시\n" 
-                  + RESERVATION + " 0시~2시\n" 
-                  + "--------------------\n"
-                  + "예약시간보다 일찍 로그아웃한 경우 이후 시간은 예약취소됩니다.\n"
-                  + LOGIN + "\n"
-                  + LOGOUT + "\n"
-                  + "--------------------\n"
-                  + CANCEL + " 0시\n"  
-                  + CANCEL_ALL + "\n" 
-                  + "--------------------\n"
-                  + LIST + "\n" 
-                  + HELP + " or /니꼬";
-              replier.reply(help);
-           }
 
-           if(sender === MANAGER){
-            if(msg === "/저장"){
-                  if(save(SDCARD, FILENAME, reservations) === true){
-                     replier.reply("저장 성공");
-                  }else{
-                     replier.reply("저장 실패");
+              if(msg === "/불러오기"){
+                 if(read(SDCARD, FILENAME) === true){
+                    replier.reply("불러오기 성공");
+                 }else{
+                    replier.reply("불러오기 실패");
+                 }
+              }
+
+              if(msg === "/정보"){
+                 replier.reply("시간 : " + currentHour + "\n예약자 : " + reservationUser + "\n사용자 : " + currentLoginUser);
+              }
+
+              // 종료
+               if(msg === "/종료") {
+                  try{
+                     clearInterval(startTimer);
+                     init(false);
+                     Api.off(scriptName);
+                     Api.reload(scriptName);
+                     replier.reply("정상적으로 종료하였습니다."); 
+                  }catch(e){
+                     replier.reply(e);
                   }
                }
 
-               if(msg === "/불러오기"){
-                  if(read(SDCARD, FILENAME) === true){
-                     replier.reply("불러오기 성공");
-                  }else{
-                     replier.reply("불러오기 실패");
-                  }
-               }
+           }
+       }
 
-               if(msg === "/정보"){
-                  replier.reply("시간 : " + currentHour + "\n예약자 : " + reservationUser + "\n사용자 : " + currentLoginUser);
-               }
-            }
-        }
+}
 
- }
-
- function onStartCompile(){
-   try{
-       clearInterval(startTimer);
-       save(SDCARD, FILENAME, reservations);
-   }catch(e){
-   }
+function onStartCompile(){
+  try{
+      clearInterval(startTimer);
+      save(SDCARD, FILENAME, reservations);
+  }catch(e){
+  }
 }
 
 function init(is){
-   count = 0;
-   reservations = new Array();
-   for(var i=0; i<24; i++){
-    reservations[i] = new reservations_f();
-    reservations[i].name = "None";
-    reservations[i].status = 0;
-   }
+  count = 0;
+  reservations = new Array();
+  for(var i=0; i<24; i++){
+   reservations[i] = new reservations_f();
+   reservations[i].name = "None";
+   reservations[i].status = 0;
+  }
+  
+  if(is === true){
    currentHour = new Date().getHours();
    currentDay = new Date().getDate();
-   currentLoginUser = "None";
-   
-   if(is === true){
+
       read(SDCARD, FILENAME)
-   }
-   for(var i in reservations){
-      if(reservations[i].status === 1){
-         currentLoginUser = reservations[i].name;
-         break;
+      for(var i in reservations){
+         if(reservations[i].status === 1){
+            currentLoginUser = reservations[i].name;
+            break;
+         }
       }
+      reservationUser = reservations[currentHour].name;
+   } else{
+      currentLoginUser = "None";
+      reservationUser = "None";
    }
-   reservationUser = reservations[currentHour].name;
 }
