@@ -1,6 +1,6 @@
 const scriptName="Nico.js";
 const ROOMS = "PNN 공부합시다"; //방 이름
-const VER = "ver 1.4"; // 버전
+const VER = "ver 1.4.3"; // 버전
 const TIME = 60 * 5; //알람 주기
 var ROOM2;
 var REPLIER2;
@@ -27,6 +27,7 @@ const CANCEL_ALL = NICO + "모든예약취소";
 
 const LIST = NICO + "리스트";
 const RESTART =  NICO + "재시작";
+const NOTICE = NICO + "공지사항";
 
 var currentDay; // 현재 날짜
 var currentHour; // 현재 시간
@@ -137,7 +138,7 @@ function timeOut(time){
     }catch(e){
        return e;
     }
-    return true;
+    return "저장 성공";
  }
  
  // 파일 읽기
@@ -165,7 +166,7 @@ function timeOut(time){
            fis.close();
            isr.close();
            br.close();
-           return true;
+           return "불러오기 성공";
         }catch(e){
            return e;
         }
@@ -275,6 +276,12 @@ function reservationList() {
     return str;
  }
 
+ function restart_app(app_name){
+   Api.off(app_name);
+   Api.reload(app_name);
+   Api.on(app_name);
+ }
+
 // 메시지
 function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId){
    if(room === ROOMS){
@@ -289,16 +296,27 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
 
           startTimer = setInterval(function(){
              var day = new Date();
-             currentHour = day.getHours();
-             reservationUser = reservations[currentHour].name;
-             timeOut(currentHour); //마감 확인
 
-             if(currentLoginUser !== "None" && reservationUser === "None"){
-                reserv(currentLoginUser, currentHour, currentHour);
-                replier.reply("[" + currentLoginUser + "]님의 예약 시간을 1시간 연장했습니다.");
+             if(currentDay !== day.getDate()){ // 날짜 변경을 확인하여 정보 초기화 및 재시작
+               REPLIER2.reply(ROOM2, day.getMonth()+1 + "/" + currentDay + "일자 예약 리스트를 초기화합니다.");
+               init(false);
+               restart_app(scriptName);
              }
 
-             if(reservationUser !== "None" && currentLoginUser !== reservationUser){
+             if(currentHour !== day.getHours()){
+               currentHour = day.getHours();
+               reservationUser = reservations[currentHour].name;
+               timeOut(currentHour); //마감 확인
+
+               if(currentLoginUser !== "None" && reservationUser === "None"){ //자동 시간 연장
+                  reserv(currentLoginUser, currentHour, currentHour);
+                  replier.reply("[" + currentLoginUser + "]님의 예약 시간을 1시간 연장했습니다.");
+               }
+
+               save(SDCARD, FILENAME, reservations); //정보 저장
+             }
+
+             if(reservationUser !== "None" && currentLoginUser !== reservationUser){ //독촉장
                if(count === TIME){
                   count = 0;
                   if(currentLoginUser !== "None" && reservationUser !== "None" && reservationUser !== currentLoginUser){
@@ -306,13 +324,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
                   }
                }
                count++;
-             }
-
-             if(currentDay !== day.getDate()){ // 날짜 변경을 확인하여 정보 초기화
-               REPLIER2.reply(ROOM2, day.getMonth()+1 + "/" + currentDay + "일자 예약 리스트를 초기화합니다.");
-               init(false);
-               save(SDCARD, FILENAME, reservations);
-             }
+             }   
           }, 1000);
        }
  
@@ -371,9 +383,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
           // 재시작
           if(msg === RESTART) {
              replier.reply("니꼬 재시작 합니다.");
-             Api.off(scriptName);
-             Api.reload(scriptName);
-             Api.on(scriptName);
+             restart_app(scriptName);
           }
           
           // 도움말
@@ -394,26 +404,31 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
                  + CANCEL_ALL + "\n" 
                  + "--------------------\n"
                  + LIST + "\n" 
+                 + NOTICE + "\n"
                  + RESTART + " : 문제발생시 사용\n" 
                  + HELP + " or /니꼬";
              replier.reply(help);
           }
 
+          if(msg === NOTICE){
+             const noticeMsg = "[공지사항]\n"
+             + "--------------------\n"
+             + "MVP기능 추가 예정";
+             replier.reply(noticeMsg);
+          }
+
           if(sender === MANAGER){
-           if(msg === "/저장"){
-                 if(save(SDCARD, FILENAME, reservations) === true){
-                    replier.reply("저장 성공");
-                 }else{
-                    replier.reply("저장 실패");
-                 }
-              }
+               if(msg === "/초기화"){
+                  init(false);
+                  restart_app(scriptName);
+               }
+
+               if(msg === "/저장"){
+                  replier.reply(save(SDCARD, FILENAME, reservations));
+               }
 
               if(msg === "/불러오기"){
-                 if(read(SDCARD, FILENAME) === true){
-                    replier.reply("불러오기 성공");
-                 }else{
-                    replier.reply("불러오기 실패");
-                 }
+               replier.reply(read(SDCARD, FILENAME));
               }
 
               if(msg === "/정보"){
@@ -435,7 +450,6 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
 
            }
        }
-
 }
 
 function onStartCompile(){
@@ -454,11 +468,11 @@ function init(is){
    reservations[i].name = "None";
    reservations[i].status = 0;
   }
-  
-  if(is === true){
-   currentHour = new Date().getHours();
-   currentDay = new Date().getDate();
+  currentHour = new Date().getHours();
+  currentDay = new Date().getDate();
+  currentLoginUser = "None";
 
+   if(is === true){
       read(SDCARD, FILENAME)
       for(var i in reservations){
          if(reservations[i].status === 1){
@@ -467,8 +481,7 @@ function init(is){
          }
       }
       reservationUser = reservations[currentHour].name;
-   } else{
-      currentLoginUser = "None";
+   }else{
       reservationUser = "None";
    }
 }
