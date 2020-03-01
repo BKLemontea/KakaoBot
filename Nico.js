@@ -1,6 +1,6 @@
 const scriptName="Nico.js";
 const ROOMS = "PNN 공부합시다"; //방 이름
-const VER = "ver 1.4.3"; // 버전
+const VER = "ver 1.5"; // 버전
 const TIME = 60 * 5; //알람 주기
 var ROOM2;
 var REPLIER2;
@@ -20,7 +20,11 @@ const RESERVATION_NOW = NICO + "납치";
 const RESERVATION = NICO + "예약";
 
 const LOGIN = NICO + "로그인";
-const LOGOUT = NICO + "로그아웃";
+const LOGOUT = new Array(
+   NICO + "로그아웃",
+   NICO + "해방",
+   NICO + "이즈프리"
+);
 
 const CANCEL = NICO + "예약취소";
 const CANCEL_ALL = NICO + "모든예약취소";
@@ -28,6 +32,8 @@ const CANCEL_ALL = NICO + "모든예약취소";
 const LIST = NICO + "리스트";
 const RESTART =  NICO + "재시작";
 const NOTICE = NICO + "공지사항";
+
+const MVP = NICO + "MVP";
 
 var currentDay; // 현재 날짜
 var currentHour; // 현재 시간
@@ -259,7 +265,7 @@ function cancelReservationAll(sender) {
 
  // 예약 리스트 보여주기
 function reservationList() {
-    var str = "[예약 리스트] " + (parseInt(new Date().getMonth())+1) + "/" + currentDay;
+    var str = "[예약 리스트] " + (new Date().getMonth()+1) + "/" + currentDay;
     for(var i=0; i<24; i++) {
        if(i<10){
           str += "\n0" + i + "시 ";
@@ -274,6 +280,63 @@ function reservationList() {
        }
     }
     return str;
+ }
+
+ // 오늘의 MVP는 누구?
+ function todayMVP(){
+    var frequencys = new Array()
+    
+    try{
+      for(var reservation of reservations){
+         if(reservation.name !== "None"){
+            if(!frequencys.length){
+               frequencys.push({name:reservation.name, count:0});
+            }else{
+               var fre_flag = false;
+               for(var fre of frequencys){
+                  if(fre.name === reservation.name){
+                     fre_flag = true;
+                  }
+               }
+               if(!fre_flag){
+                  frequencys.push({name:reservation.name, count:0});
+               }
+            }
+         }
+      }
+      
+      if(frequencys.length){
+         for(var fre of frequencys){
+            for(var reservation of reservations){
+               if(fre.name === reservation.name){
+                  fre.count++;
+               }
+            }
+         }
+         
+         if(frequencys.length>1){ //비교대상이 두명 이상일때
+            frequencys.sort(function (a, b) { //횟수가 많은 순으로 정렬
+               return a.count > b.count ? -1 : a.count < b.count ? 1 : 0;  
+            });
+         }
+
+         var msg = "[오늘의 MVP]\n"
+         + frequencys[0].name + ", ";
+
+         if(frequencys.length>1){
+            for(var i=1; i<frequencys.length; i++){ //동점자
+               if(frequencys[i].count === frequencys[0].count){
+                  msg += frequencys[i].name + ", ";
+               }
+            }
+         }
+         return msg.slice(0,-2);
+      }else{
+         return "오늘은 아무도 안하셨네요...";
+      }
+   }catch(e){
+      return e;
+   }
  }
 
  function restart_app(app_name){
@@ -298,6 +361,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
              var day = new Date();
 
              if(currentDay !== day.getDate()){ // 날짜 변경을 확인하여 정보 초기화 및 재시작
+               REPLIER2.reply(ROOM2, todayMVP());
                REPLIER2.reply(ROOM2, day.getMonth()+1 + "/" + currentDay + "일자 예약 리스트를 초기화합니다.");
                init(false);
                restart_app(scriptName);
@@ -332,10 +396,12 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
              replier.reply(useNico(sender));
           }
  
-          if(msg === LOGOUT ){
-             replier.reply(stopNico(sender));
+          for(var logoutMsg of LOGOUT){
+            if(msg === logoutMsg){
+               replier.reply(stopNico(sender));
+            }
           }
- 
+
           if(msg === LIST) { // 리스트 보여주기
              replier.reply(reservationList());
           }
@@ -397,9 +463,14 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
                  + RESERVATION + " 0시~2시\n" 
                  + "--------------------\n"
                  + "예약시간보다 일찍 로그아웃한 경우 이후 시간은 예약취소됩니다.\n"
-                 + LOGIN + "\n"
-                 + LOGOUT + "\n"
-                 + "--------------------\n"
+                 + LOGIN + "\n";
+
+                 for(var helpMsg of LOGOUT){
+                     help += helpMsg + "\n";
+                 }
+                 
+                 help += 
+                 "--------------------\n"
                  + CANCEL + " 0시\n"  
                  + CANCEL_ALL + "\n" 
                  + "--------------------\n"
@@ -407,17 +478,24 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
                  + NOTICE + "\n"
                  + RESTART + " : 문제발생시 사용\n" 
                  + HELP + " or /니꼬";
+
              replier.reply(help);
           }
 
           if(msg === NOTICE){
              const noticeMsg = "[공지사항]\n"
              + "--------------------\n"
-             + "MVP기능 추가 예정";
+             + "MVP기능 추가 완료\n"
+             + "명령어 학습 기능 추가 예정";
              replier.reply(noticeMsg);
           }
 
           if(sender === MANAGER){
+
+               if(msg === MVP){
+                  replier.reply(todayMVP());
+               }
+
                if(msg === "/초기화"){
                   init(false);
                   restart_app(scriptName);
