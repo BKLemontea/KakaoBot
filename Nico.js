@@ -1,9 +1,7 @@
 const scriptName="Nico.js";
 const ROOMS = "PNN 공부합시다"; //방 이름
-const VER = "ver 1.5"; // 버전
+const VER = "ver 1.5.1"; // 버전
 const TIME = 60 * 5; //알람 주기
-var ROOM2;
-var REPLIER2;
 const MANAGER = "김재윤";
 
 // 파일 저장 & 읽기
@@ -32,8 +30,6 @@ const CANCEL_ALL = NICO + "모든예약취소";
 const LIST = NICO + "리스트";
 const RESTART =  NICO + "재시작";
 const NOTICE = NICO + "공지사항";
-
-const MVP = NICO + "MVP";
 
 var currentDay; // 현재 날짜
 var currentHour; // 현재 시간
@@ -238,6 +234,11 @@ function cancelReservation(sender, time, is){
          reservations[time] = new reservations_f();
          reservations[time].name = "None";
          reservations[time].status = 0;
+
+         if(new Date().getHours() == time){
+            reservationUser = "None";
+         }
+
          return time + "시에 예약되어있던 [" + sender + "]님의 예약을 취소하였습니다.";
       }else{
          return "로그아웃부터 해주시기 바랍니다.";
@@ -258,7 +259,13 @@ function cancelReservationAll(sender) {
         }
     }
     if(cancelReservAll === true){
-       return "[" + sender + "]님의 모든 예약을 취소했습니다.";
+      if(currentLoginUser === sender){
+         currentLoginUser = "None";
+      }
+      if(reservationUser === sender){
+         reservationUser = "None";
+      }
+      return "[" + sender + "]님의 모든 예약을 취소했습니다.";
     }
     return "[" + sender + "]님의 예약이 존재하지않습니다.";
  }
@@ -347,11 +354,6 @@ function reservationList() {
 
 // 메시지
 function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId){
-   if(room === ROOMS){
-       ROOM2 = room;
-       REPLIER2 = replier;
-    }
-
     if(room === ROOMS){
        if(flag === true) { // 최초 실행시 실행됨
           init(true);
@@ -361,8 +363,8 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
              var day = new Date();
 
              if(currentDay !== day.getDate()){ // 날짜 변경을 확인하여 정보 초기화 및 재시작
-               REPLIER2.reply(ROOM2, todayMVP());
-               REPLIER2.reply(ROOM2, day.getMonth()+1 + "/" + currentDay + "일자 예약 리스트를 초기화합니다.");
+               replier.reply(todayMVP());
+               replier.reply(day.getMonth()+1 + "/" + currentDay + "일자 예약 리스트를 초기화합니다.");
                init(false);
                restart_app(scriptName);
              }
@@ -380,14 +382,16 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
                save(SDCARD, FILENAME, reservations); //정보 저장
              }
 
-             if(reservationUser !== "None" && currentLoginUser !== reservationUser){ //독촉장
-               if(count === TIME){
+             if(currentLoginUser !== "None" && reservationUser !== "None" && currentLoginUser !== reservationUser){ //독촉장
+               if(count >= TIME){
                   count = 0;
-                  if(currentLoginUser !== "None" && reservationUser !== "None" && reservationUser !== currentLoginUser){
-                     REPLIER2.reply(ROOM2, "[알림]\n다음 예약자[" + reservationUser + "]님이 기다리고 있습니다.");
-                  }
+                  replier.reply("[알림]\n다음 예약자[" + reservationUser + "]님이 기다리고 있습니다.");
                }
                count++;
+             }else{
+                if(count !== 0){
+                   count = 0;
+                }
              }   
           }, 1000);
        }
@@ -492,7 +496,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
 
           if(sender === MANAGER){
 
-               if(msg === MVP){
+               if(msg === "/MVP"){
                   replier.reply(todayMVP());
                }
 
