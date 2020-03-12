@@ -1,14 +1,23 @@
 const scriptName="manage.js";
-const VER = "ver 1.2";
+const VER = "ver 1.3";
 const MANAGER = new Array(
     "김재윤",
     "허재녕"
 );
 
-function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId){
+function checkManager(sender){
     for(var man of MANAGER){
+        if(sender === man){
+            return true;
+        }
+    }
+    return false;
+}
+
+function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName, threadId){
+    if(checkManager(sender) === true){
         //js 파일 목록
-        if(sender === man && msg === "/파일목록"){
+        if(msg === "/파일목록"){
             var str="[ 파일 목록 ]";
             for(var text of Api.getScriptNames()){
                 str += "\n" + text;
@@ -17,7 +26,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
         }
 
         //리로드할 파일 목록 & 리로드
-        if(sender === man && msg.indexOf("/업데이트") !== -1 ){
+        if(msg.indexOf("/업데이트") !== -1 ){
             if(msg.split(" ")[2] !== undefined){
                 if(msg.split(" ")[2].indexOf(".js") !== -1 ){
                     operationJS = msg.split(" ")[1] + " " + msg.split(" ")[2] + ".js";
@@ -35,7 +44,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
             }
         }
 
-        if(sender === man && msg.indexOf("/리로드") !== -1 ){
+        if(msg.indexOf("/리로드") !== -1 ){
             if(msg.split(" ")[2] !== undefined){
                 if(msg.split(" ")[2].indexOf(".js") !== -1 ){
                     operationJS = msg.split(" ")[1] + " " + msg.split(" ")[2] + ".js";
@@ -53,7 +62,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
             }
         }
 
-        if(sender === man && msg.indexOf("/켜기") !== -1 ){
+        if(msg.indexOf("/켜기") !== -1 ){
             if(msg.split(" ")[2] !== undefined){
                 if(msg.split(" ")[2].indexOf(".js") !== -1 ){
                     operationJS = msg.split(" ")[1] + " " + msg.split(" ")[2] + ".js";
@@ -71,7 +80,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
             }
         }
 
-        if(sender === man && msg.indexOf("/끄기") !== -1 ){
+        if(msg.indexOf("/끄기") !== -1 ){
             if(msg.split(" ")[2] !== undefined){
                 if(msg.split(" ")[2].indexOf(".js") !== -1 ){
                     operationJS = msg.split(" ")[1] + " " + msg.split(" ")[2] + ".js";
@@ -89,7 +98,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
             }
         }
 
-        if(sender === man && msg === "/도움말"){
+        if(msg === "/도움말"){
             replier.reply("[명령어] " + VER + "\n/파일목록\n/업데이트 test.js\n/리로드 test.js\n/켜기 test.js\n/끄기 test.js");
         }
     }
