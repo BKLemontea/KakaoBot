@@ -2,7 +2,7 @@ const scriptName="조깅.js";
 
 const MEMBER_FILENAME = "MemberList";
 const ROOM = "렛츠 조깅!";
-const VER = "1.0";
+const VER = "1.1";
 const LOCATION = "삼안동";
 const URL = "https://search.naver.com/search.naver?sm=top_hty&fbm=1&ie=utf8&query=" + LOCATION + "+날씨";
 const MANAGER = [
@@ -218,6 +218,7 @@ function interval(replier) {
         if(time.getDate() != time_y.getDate()){
             init();
             loadMember();
+            replier.reply("김재윤", "초기화 합니다.");
         }
 
         time = time_y;
@@ -252,7 +253,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
     // 관리자
     if(checkManager(sender) === true){
         if(msg === "/관리자 명령어"){
-            let managerCommendMsg = "[관리자 명령어]\n--------------------------\n/조깅 종료\n/멤버 초기화";
+            let managerCommendMsg = "[관리자 명령어]\n--------------------------\n/조깅 종료\n/멤버 초기화\n/조깅 정보\n/공지 [메시지]";
             replier.reply(managerCommendMsg);
         }else if(msg === "/조깅 종료"){
             try{
@@ -264,6 +265,19 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
         }else if(msg === "/멤버 초기화"){
             DataBase.removeDataBase(MEMBER_FILENAME);
             replier.reply(loadMember());
+        }else if(msg === "/조깅 정보"){
+            let infoMsg = "[정보]\n" +
+                            "알람 시간 : " + HOUR + ":" + MINUTE + "\n" +
+                            "마감 시간 : " + HOUR + ":" + OVER_MINUTE + "\n" +
+                            "알람 가능 여부 : " + ALARMTIME + "\n" +
+                            "시간 만료 여부 : " + TIMEOVER;
+            replier.reply(infoMsg);
+        }else if(msg.indexOf("/공지") !== -1){
+            let sendMsg = msg.replace("/공지",'');
+            sendMsg = sendMsg.trim();
+            for(var member of MemberList){
+                replier.reply(member.name, sendMsg);
+            }
         }
     }
     // 관리자
@@ -318,8 +332,10 @@ function init(){
 
     if( (time.getHours() == HOUR && time.getMinutes() > OVER_MINUTE) ||  time.getHours() > HOUR ){
         ALARMTIME = false;
-        TIMEOVER = true;
-    } 
+    }else{
+        ALARMTIME = true;
+    }
+    TIMEOVER = true;
 }
 
 function onStartCompile(){
