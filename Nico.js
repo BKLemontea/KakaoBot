@@ -503,9 +503,6 @@ function restart_app(app_name) {
 }
 
 function interval(replier) { //
-   init(true);
-   flag = false;
-
    startTimer = setInterval(function () {
       var day = new Date();
 
@@ -548,6 +545,8 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
    try{
       if (room === ROOMS) {
          if (flag === true) { // 최초 실행시 실행됨
+            init(true);
+            flag = false;
             interval(replier);
          }
 
@@ -766,6 +765,10 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
 
             else if (msg === "/정보") {
                replier.reply("시간 : " + currentHour + "\n예약자 : " + reservationUser + "\n사용자 : " + currentLoginUser);
+            }
+
+            else if(msg === "/강제 로그아웃"){
+               replier.reply(stopNico(currentLoginUser));
             }
 
             // 종료

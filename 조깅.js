@@ -212,13 +212,13 @@ function weather(){
 }
 
 function interval(replier) {
-    alarm = setInterval(function () {
+    alarm = setInterval(function(){
         let time_y = new Date();
 
         if(time.getDate() != time_y.getDate()){
+            replier.reply("김재윤", "초기화 합니다.");
             init();
             loadMember();
-            replier.reply("김재윤", "초기화 합니다.");
         }
 
         time = time_y;
