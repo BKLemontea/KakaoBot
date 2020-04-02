@@ -1,13 +1,15 @@
 const scriptName="Nico.js";
 const ROOMS = "PNN 공부합시다"; //방 이름
-const VER = "ver 1.6"; // 버전
+const VER = "ver 1.7"; // 버전
 const TIME = 60 * 5; //알람 주기
 const MANAGER = "김재윤";
+const EMPTY = "None";
 
 // 파일 저장 & 읽기
-const SDCARD = android.os.Environment.getExternalStorageDirectory().getAbsolutePath() + "/katalkbot/lib/"; //절대 경로
+const SDCARD = android.os.Environment.getExternalStorageDirectory().getAbsolutePath() + "/katalkbot/lib/nico/"; //절대 경로
 const FILENAME = "reservations.txt";
 const FILENAME_LOGOUT = "로그아웃.txt";
+const FILENAME_RANKING = "RANKING.txt";
 
 // 명령어
 const SC = "/";
@@ -27,7 +29,7 @@ const CANCEL = NICO + "예약취소";
 const CANCEL_ALL = NICO + "모든예약취소";
 
 const LIST = NICO + "리스트";
-const RESTART = NICO + "재시작";
+const RECORD = NICO + "사용기록";
 const NOTICE = NICO + "공지사항";
 
 const COMMAND = NICO + "명령어";
@@ -44,7 +46,7 @@ const COMMAND_LIST = new Array(
    CANCEL,
    CANCEL_ALL,
    LIST,
-   RESTART,
+   RECORD,
    NOTICE,
    COMMAND,
    COMMAND + " 추가",
@@ -55,6 +57,7 @@ var currentDay; // 현재 날짜
 var currentHour; // 현재 시간
 var currentLoginUser; // 현재 사용중인 유저
 var reservationUser; // 예약되어있는 유저
+var frequencys; //사용 기록
 var reservations; // 예약 리스트
 var flag = true; // 최초 실행 여부 확인용
 var count = 0;
@@ -104,15 +107,16 @@ function reservations_f() {
 
 // 사용
 function useNico(sender) {
-   var fl = false;
+   let useNico_flag = false;
    for (var i in reservations) {
-      if (reservations[i].name === sender && i >= currentHour && reservations[i].status === 0 && reservationUser === sender && (currentLoginUser === "None" || currentLoginUser === sender)) {
+      if (reservations[i].name === sender && i >= currentHour && reservations[i].status === 0 && reservationUser === sender && (currentLoginUser === EMPTY || currentLoginUser === sender)) {
          reservations[i].status = 1; // 사용중
-         fl = true;
-      } else if (fl === true && reservations[i].name !== sender) break;
+         useNico_flag = true;
+      } else if (useNico_flag === true && reservations[i].name !== sender) break;
    }
-   if (fl === true) {
+   if (useNico_flag === true) {
       currentLoginUser = sender;
+      addRANKING(sender);
       return "[" + sender + "]님이 로그인했습니다.";
    } else {
       return "로그인 실패";
@@ -131,7 +135,7 @@ function stopNico(sender) {
             }
          }
       }
-      currentLoginUser = "None";
+      currentLoginUser = EMPTY;
       return "[" + sender + "]님이 로그아웃했습니다.";
    } else {
       return "[" + sender + "]님은 로그인 상태가 아닙니다.";
@@ -158,11 +162,11 @@ function check_command_list(check_command, command_list){
 }
 
 // 명령어 리스트 저장
-function save_command(path, filename, ex_command_list, add_command, is){
+function save_command(add_command, is){
    try {
-      var folder = new java.io.File(path);
+      var folder = new java.io.File(SDCARD);
       folder.mkdirs();
-      var file = new java.io.File(path + filename);
+      var file = new java.io.File(SDCARD + FILENAME_LOGOUT);
       var fos = new java.io.FileOutputStream(file);
       var contentstring = "";
 
@@ -182,11 +186,11 @@ function save_command(path, filename, ex_command_list, add_command, is){
             return "이미 존재하는 명령어 입니다.";
          }
 
-         ex_command_list.push(add_command);
+         LOGOUT.push(add_command);
       }
       
-      for(var i=1; i<ex_command_list.length; i++){
-         contentstring += ex_command_list[i].replace(NICO, '') + "\n";
+      for(var i=1; i<LOGOUT.length; i++){
+         contentstring += LOGOUT[i].replace(NICO, '') + "\n";
       }
 
       contentstring = new java.lang.String(contentstring.slice(0, -1));
@@ -199,24 +203,26 @@ function save_command(path, filename, ex_command_list, add_command, is){
 }
 
 // 명령어 리스트 불러오기
-function load_command(path, filename, ex_command_list){
-   var file = new java.io.File(path + filename);
+function load_command(){
+   let file = new java.io.File(SDCARD + FILENAME_LOGOUT);
    if (file.exists() == false) return null;
    try {
-      var fis = new java.io.FileInputStream(file);
-      var isr = new java.io.InputStreamReader(fis);
-      var br = new java.io.BufferedReader(isr);
-      var temp_br = "";
-      var temp_readline = "";
+      let fis = new java.io.FileInputStream(file);
+      let isr = new java.io.InputStreamReader(fis);
+      let br = new java.io.BufferedReader(isr);
+      let temp_br = "";
+      let temp_readline = "";
       while (true) {
          if ((temp_readline = br.readLine()) === null) break;
          temp_br += temp_readline + "\n";
       }
       temp_br = temp_br.slice(0, -1);
 
-      var temp_reserv = temp_br.split("\n");
+      let temp_reserv = temp_br.split("\n");
       for (var command of temp_reserv) {
-         ex_command_list.push(NICO + command);
+         if(check_command_list(NICO + command, LOGOUT) == true){
+            LOGOUT.push(NICO + command);
+         }
       }
 
       try {
@@ -233,38 +239,38 @@ function load_command(path, filename, ex_command_list){
 }
 
 // 명령어 삭제
-function del_command(path, filename, ex_command_list, del_command){
-   if(del_command.indexOf(NICO) === -1){
-      del_command = NICO + del_command;
+function del_command(del_com){
+   if(del_com.indexOf(NICO) === -1){
+      del_com = NICO + del_com;
    }
 
    // 기본 명령어와 중복 확인
-   if(check_command_list(del_command, COMMAND_LIST) === false){
+   if(check_command_list(del_com, COMMAND_LIST) === false){
       return "기본 명령어는 삭제할 수 없습니다.";
    }
 
-   if(check_command_list(del_command,LOGOUT[0]) === false){
+   if(check_command_list(del_com, LOGOUT[0]) === false){
       return "기본 명령어는 삭제할 수 없습니다.";
    }
 
-   for(var i=1; i<ex_command_list.length; i++){
-      if(ex_command_list[i] === del_command){
-         ex_command_list.splice(i,1);
-         save_command(path, filename, ex_command_list, "", false);
-         return "[" + del_command + "] 명령어 삭제 완료";
+   for(var i=1; i<LOGOUT.length; i++){
+      if(LOGOUT[i] === del_com){
+         LOGOUT.splice(i,1);
+         save_command("", false);
+         return "[" + del_com + "] 명령어 삭제 완료";
       }
    }
-   return "[" + del_command + "] 명령어가 존재하지 않습니다.";
+   return "[" + del_com + "] 명령어가 존재하지 않습니다.";
 }
 
 // 파일 저장
-function save(path, filename, content) {
+function save(content) {
    try {
-      var folder = new java.io.File(path);
+      let folder = new java.io.File(SDCARD);
       folder.mkdirs();
-      var file = new java.io.File(path + filename);
-      var fos = new java.io.FileOutputStream(file);
-      var contentstring = "";
+      let file = new java.io.File(SDCARD + FILENAME);
+      let fos = new java.io.FileOutputStream(file);
+      let contentstring = "";
       for (var i in content) {
          contentstring += reservations[i].name + "|" + reservations[i].status + "\n";
       }
@@ -278,22 +284,22 @@ function save(path, filename, content) {
 }
 
 // 파일 읽기
-function read(path, filename) {
-   var file = new java.io.File(path + filename);
+function read() {
+   let file = new java.io.File(SDCARD + FILENAME);
    if (file.exists() == false) return null;
    try {
-      var fis = new java.io.FileInputStream(file);
-      var isr = new java.io.InputStreamReader(fis);
-      var br = new java.io.BufferedReader(isr);
-      var temp_br = "";
-      var temp_readline = "";
+      let fis = new java.io.FileInputStream(file);
+      let isr = new java.io.InputStreamReader(fis);
+      let br = new java.io.BufferedReader(isr);
+      let temp_br = "";
+      let temp_readline = "";
       while (true) {
          if ((temp_readline = br.readLine()) === null) break;
          temp_br += temp_readline + "\n";
       }
       temp_br = temp_br.slice(0, -1);
 
-      var temp_reserv = temp_br.split("\n");
+      let temp_reserv = temp_br.split("\n");
       for (var i = 0; i < 24; i++) {
          reservations[i].name = temp_reserv[i].split("|")[0];
          reservations[i].status = parseInt(temp_reserv[i].split("|")[1]);
@@ -313,7 +319,7 @@ function read(path, filename) {
 
 // 중복 시간 확인
 function checkOverlap(m) {
-   if (reservations[m].name !== "None") {
+   if (reservations[m].name !== EMPTY) {
       return true;
    }
    return false;
@@ -372,11 +378,11 @@ function cancelReservation(sender, time, is) {
    if (reservations[time].name === sender) {
       if (reservations[time].status !== 1 || is === true) {
          reservations[time] = new reservations_f();
-         reservations[time].name = "None";
+         reservations[time].name = EMPTY;
          reservations[time].status = 0;
 
          if (new Date().getHours() == time) {
-            reservationUser = "None";
+            reservationUser = EMPTY;
          }
 
          return time + "시에 예약되어있던 [" + sender + "]님의 예약을 취소하였습니다.";
@@ -393,17 +399,17 @@ function cancelReservationAll(sender) {
    for (var i in reservations) {
       if (reservations[i].name === sender) {
          reservations[i] = new reservations_f();
-         reservations[i].name = "None";
+         reservations[i].name = EMPTY;
          reservations[i].status = 0;
          cancelReservAll = true;
       }
    }
    if (cancelReservAll === true) {
       if (currentLoginUser === sender) {
-         currentLoginUser = "None";
+         currentLoginUser = EMPTY;
       }
       if (reservationUser === sender) {
-         reservationUser = "None";
+         reservationUser = EMPTY;
       }
       return "[" + sender + "]님의 모든 예약을 취소했습니다.";
    }
@@ -419,7 +425,7 @@ function reservationList() {
       } else {
          str += "\n" + i + "시 ";
       }
-      if (reservations[i].name !== "None") {
+      if (reservations[i].name !== EMPTY) {
          str += ": " + reservations[i].name;
          if (reservations[i].status === 1) {
             str += " [★로그인★]";
@@ -433,84 +439,147 @@ function reservationList() {
    return str;
 }
 
-// 오늘의 MVP는 누구?
-function todayMVP() {
-   var frequencys = new Array()
-
-   try {
-      for (var reservation of reservations) {
-         if (reservation.name !== "None") {
-            if (!frequencys.length) {
-               frequencys.push({
-                  name: reservation.name,
-                  count: 0
-               });
-            } else {
-               var fre_flag = false;
-               for (var fre of frequencys) {
-                  if (fre.name === reservation.name) {
-                     fre_flag = true;
-                  }
-               }
-               if (!fre_flag) {
-                  frequencys.push({
-                     name: reservation.name,
-                     count: 0
-                  });
-               }
-            }
-         }
+// RANKING
+function todayRANKING() {
+   if(frequencys.length == 0){
+      return "아무도 사용하지 않았네요ㅠㅠ";
+   }else{
+      if (frequencys.length > 1) { //비교대상이 두명 이상일때
+         frequencys.sort(function (a, b) { //횟수가 많은 순으로 정렬
+            return a.time > b.time ? -1 : a.time < b.time ? 1 : 0;
+         });
       }
 
-      if (frequencys.length) {
+      let text = "[랭킹]\n순위\t이름\t시간\n";
+      for(var i in frequencys){
+         let hour = parseInt(frequencys[i].time/3600);
+         let min = parseInt((frequencys[i].time%3600)/60);
+         let sec = frequencys[i].time%60;
+         text += (parseInt(i) + 1) + "위\t" + frequencys[i].username + "\t" + hour + ":" + min + ":" + sec + "\n";
+      }
+      return text.slice(0, -1);
+   }
+}
+
+function addRANKING(sender){
+   if(frequencys.length != 0){
+      for(var fre of frequencys){
+         if(fre.username == sender){
+            return false;
+         }
+      }
+   }
+
+   frequencys.push({
+      username: sender,
+      time: 0
+   });
+   return true;
+}
+
+function countRANKING(){
+   if(currentLoginUser == EMPTY){
+      return false;
+   }
+
+   for(var fre of frequencys){
+      if(fre.username == currentLoginUser){
+         fre.time++;
+         return true;
+      }
+   }
+
+   return addRANKING(currentLoginUser);
+}
+
+function listRANKING(){
+   if(frequencys.length == 0){
+      return "아직 아무도 사용한 기록이 없습니다.";
+   }else{
+      let text = "[사용 기록]\n";
+      for(var fre of frequencys){
+         let hour = parseInt(fre.time/3600);
+         let min = parseInt((fre.time%3600)/60);
+         let sec = fre.time%60;
+         text += "[" + fre.username + "] " + hour + ":" + min + ":" + sec + "\n";
+      }
+      return text.slice(0, -1);
+   }
+}
+
+// RANKING 기록 저장
+function saveRANKING() {
+   try {
+      if(frequencys.length > 0){
+         let folder = new java.io.File(SDCARD);
+         folder.mkdirs();
+         let file = new java.io.File(SDCARD + FILENAME_RANKING);
+         let fos = new java.io.FileOutputStream(file);
+         let contentstring = "";
          for (var fre of frequencys) {
-            for (var reservation of reservations) {
-               if (fre.name === reservation.name) {
-                  fre.count++;
-               }
-            }
+            contentstring += fre.username + "|" + fre.time + "\n";
          }
+         contentstring = new java.lang.String(contentstring.slice(0, -1));
+         fos.write(contentstring.getBytes());
+         fos.close();
+      }
+   } catch (e) {
+      return e;
+   }
+   return "저장 성공";
+}
 
-         if (frequencys.length > 1) { //비교대상이 두명 이상일때
-            frequencys.sort(function (a, b) { //횟수가 많은 순으로 정렬
-               return a.count > b.count ? -1 : a.count < b.count ? 1 : 0;
-            });
-         }
+// RANKING 기록 불러오기
+function loadRANKING() {
+   let file = new java.io.File(SDCARD + FILENAME_RANKING);
+   if (file.exists() == false) return null;
+   try {
+      let fis = new java.io.FileInputStream(file);
+      let isr = new java.io.InputStreamReader(fis);
+      let br = new java.io.BufferedReader(isr);
+      let temp_br = "";
+      let temp_readline = "";
+      while (true) {
+         if ((temp_readline = br.readLine()) === null) break;
+         temp_br += temp_readline + "\n";
+      }
+      temp_br = temp_br.slice(0, -1);
 
-         var msg = "[오늘의 MVP]\n" +
-            frequencys[0].name + ", ";
-
-         if (frequencys.length > 1) {
-            for (var i = 1; i < frequencys.length; i++) { //동점자
-               if (frequencys[i].count === frequencys[0].count) {
-                  msg += frequencys[i].name + ", ";
-               }
-            }
-         }
-         return msg.slice(0, -2);
-      } else {
-         return "오늘은 아무도 안하셨네요...";
+      let temp_reserv = temp_br.split("\n");
+      for (var temp of temp_reserv) {
+         frequencys.push({
+            username: temp.split("|")[0],
+            time: parseInt(temp.split("|")[1])
+         });
+      }
+      try {
+         fis.close();
+         isr.close();
+         br.close();
+         return "불러오기 성공";
+      } catch (e) {
+         return e;
       }
    } catch (e) {
       return e;
    }
 }
 
-function restart_app(app_name) {
-   Api.off(app_name);
-   Api.reload(app_name);
-   Api.on(app_name);
-}
-
 function interval(replier) { //
+   init(true);
+   flag = false;
+
    startTimer = setInterval(function () {
-      var day = new Date();
+      let day = new Date();
+      countRANKING();
 
       if (currentDay !== day.getDate()) { // 날짜 변경을 확인하여 정보 초기화 및 재시작
-         replier.reply(todayMVP());
-         replier.reply(day.getMonth() + 1 + "/" + currentDay + "일자 예약 리스트를 초기화합니다.");
+         replier.reply(todayRANKING());
+         replier.reply("[" + day.getMonth() + 1 + "/" + day.getDate() + "]\n새로운 예약리스트를 진행합니다.");
          init(false);
-         restart_app(scriptName);
+         save(reservations);
+         saveRANKING();
+         save_command("", false);
       }
 
       if (currentHour !== day.getHours()) {
@@ -518,15 +587,15 @@ function interval(replier) { //
          reservationUser = reservations[currentHour].name;
          timeOut(currentHour); //마감 확인
 
-         if (currentLoginUser !== "None" && reservationUser === "None") { //자동 시간 연장
+         if (currentLoginUser !== EMPTY && reservationUser === EMPTY) { //자동 시간 연장
             reserv(currentLoginUser, currentHour, currentHour);
             replier.reply("[" + currentLoginUser + "]님의 예약 시간을 1시간 연장했습니다.");
          }
 
-         save(SDCARD, FILENAME, reservations); //정보 저장
+         save(reservations); //정보 저장
       }
 
-      if (currentLoginUser !== "None" && reservationUser !== "None" && currentLoginUser !== reservationUser) { //독촉장
+      if (currentLoginUser !== EMPTY && reservationUser !== EMPTY && currentLoginUser !== reservationUser) { //독촉장
          if (count >= TIME) {
             count = 0;
             replier.reply("[알림]\n다음 예약자[" + reservationUser + "]님이 기다리고 있습니다.");
@@ -545,14 +614,12 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
    try{
       if (room === ROOMS) {
          if (flag === true) { // 최초 실행시 실행됨
-            init(true);
-            flag = false;
             interval(replier);
          }
 
          // 도움말
          if (msg.indexOf(HELP) !== -1 || msg === "/니꼬") { // 도움말
-            var help = "[명령어] " + VER + "\n" +
+            let help = "[명령어] " + VER + "\n" +
                "--------------------\n";
             
             try{
@@ -595,14 +662,14 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
                   + "예약 리스트를 보여줍니다.";
             }
 
+            else if(msg.indexOf(RECORD.replace(NICO, '')) !== -1){
+               help += RECORD + "\n"
+                  + "사용자들의 니꼬 사용 시간을 보여줍니다.";
+            }
+
             else if(msg.indexOf(NOTICE.replace(NICO, '')) !== -1){
                help += NOTICE + "\n"
                   + "고오오오오옹지사항";
-            }
-
-            else if(msg.indexOf(RESTART.replace(NICO, '')) !== -1){
-               help += RESTART + "\n"
-                  + "문제가 발생하였을 경우 사용해주세요";
             }
 
             else if(msg.indexOf(COMMAND.replace(NICO, '')) !== -1){
@@ -623,8 +690,8 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
                CANCEL + "\n" +
                CANCEL_ALL + "\n" +
                LIST + "\n" +
+               RECORD + "\n" +
                NOTICE + "\n" +
-               RESTART + "\n" +
                "--------------------\n" +
                COMMAND;
             }
@@ -637,19 +704,15 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
          // 명령어 추가, 삭제
          else if(msg.indexOf(COMMAND) !== -1){
             try{
-               const boundary_line = ':';
+               let boundary_line = ':';
                if(msg.indexOf("추가")!== -1){
-                  var add_cmd = msg.split(boundary_line)[1];
-                  if(add_cmd.substring(1,0) == ' '){
-                     add_cmd = add_cmd.substring(add_cmd.length,1);
-                  }
-                  replier.reply(save_command(SDCARD, FILENAME_LOGOUT, LOGOUT, add_cmd, true));
+                  let add_cmd = msg.split(boundary_line)[1];
+                  add_cmd = add_cmd.trim();
+                  replier.reply(save_command(add_cmd, true));
                }else if(msg.indexOf("삭제")!== -1){
-                  var del_cmd = msg.split(boundary_line)[1];
-                  if(del_cmd.substring(1,0) == ' '){
-                     del_cmd = del_cmd.substring(del_cmd.length,1);
-                  }
-                  replier.reply(del_command(SDCARD, FILENAME_LOGOUT, LOGOUT, del_cmd));
+                  let del_cmd = msg.split(boundary_line)[1];
+                  del_cmd = del_cmd.trim();
+                  replier.reply(del_command(del_cmd));
                }
             }catch(e){
                replier.reply("형식을 지켜주세요.");
@@ -666,6 +729,11 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
             replier.reply(reservationList());
          }
 
+         // 사용기록 보여주기
+         else if (msg === RECORD) { 
+            replier.reply(listRANKING());
+         }
+
          // 모든예약취소
          else if (msg === CANCEL_ALL) {
             replier.reply(cancelReservationAll(sender));
@@ -673,9 +741,9 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
 
          // 예약취소
          else if (msg.indexOf(CANCEL) !== -1) {
-            const cutMsg_s = msg.split(' ');
+            let cutMsg_s = msg.split(' ');
             try{
-               const timeMsg_s = parseInt(cutMsg_s[2].replace(/[^0-9]/g, ""));
+               let timeMsg_s = parseInt(cutMsg_s[2].replace(/[^0-9]/g, ""));
                replier.reply(cancelReservation(sender, timeMsg_s, false));
             }catch(e){
                replier.reply("시간을 입력해주세요.");
@@ -687,22 +755,22 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
             if (msg.split(' ')[2] === undefined) {
                replier.reply(reserv(sender, currentHour, currentHour));
             } else {
-               const addTime = parseInt(msg.split(' ')[2].replace(/[^0-9]/g, ""));
+               let addTime = parseInt(msg.split(' ')[2].replace(/[^0-9]/g, ""));
                replier.reply(reserv(sender, currentHour, (currentHour + addTime - 1)));
             }
          }
 
          // 단일 & 다중 시간 예약
          else if (msg.indexOf(RESERVATION) !== -1 && msg.indexOf("취소") === -1 && msg.indexOf("업데이트") === -1) {
-            const cutMsg = msg.split(' ');
+            let cutMsg = msg.split(' ');
             try {
-               const timeMsg_b = cutMsg[2].split('~');
+               let timeMsg_b = cutMsg[2].split('~');
                if (timeMsg_b[1] !== undefined) { // 다중 시간 예약
-                  const startTime = parseInt(timeMsg_b[0].replace(/[^0-9]/g, ""));
-                  const endTime = parseInt(timeMsg_b[1].replace(/[^0-9]/g, ""));
+                  let startTime = parseInt(timeMsg_b[0].replace(/[^0-9]/g, ""));
+                  let endTime = parseInt(timeMsg_b[1].replace(/[^0-9]/g, ""));
                   replier.reply(reserv(sender, startTime, endTime));
                } else { // 단일 시간 예약
-                  const timeMsg = parseInt(cutMsg[2].replace(/[^0-9]/g, ""));
+                  let timeMsg = parseInt(cutMsg[2].replace(/[^0-9]/g, ""));
                   replier.reply(reserv(sender, timeMsg, timeMsg));
                }
             } catch (e) {
@@ -710,16 +778,12 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
             }
          }
 
-         // 재시작
-         else if (msg === RESTART) {
-            replier.reply("니꼬 재시작 합니다.");
-            restart_app(scriptName);
-         }
-
          else if (msg === NOTICE) {
             const noticeMsg = "[공지사항]\n" +
                "--------------------\n" +
-               "명령어 학습기능은 [로그아웃]만 가능합니다.";
+               "명령어 학습기능은 [로그아웃]만 가능합니다.\n" +
+               "기존 MVP 기능을 삭제하고 랭킹으로 변경\n" +
+               "랭킹은 별도의 명령어 없이 자동으로 작동되며, 초단위로 기록됩니다.";
             replier.reply(noticeMsg);
          }
 
@@ -735,20 +799,22 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
 
          // 관리자 전용 명령어
          if (sender === MANAGER) {
-            if (msg === "/MVP") {
-               replier.reply(todayMVP());
+            if (msg === "/랭킹") {
+               replier.reply(todayRANKING());
             }
 
             else if (msg === "/초기화") {
                replier.reply("초기화를 진행합니다.");
                init(false);
-               restart_app(scriptName);
+               save(reservations);
+               saveRANKING();
+               save_command("", false);
             }
 
             else if (msg === "/명령어 초기화"){
                LOGOUT = new Array(NICO+"로그아웃");
                try{
-                  save_command(SDCARD, FILENAME_LOGOUT, LOGOUT, "", false);
+                  save_command("", false);
                   replier.reply("명령어 초기화 완료");
                }catch(e){
                   replier.reply("명령어 초기화 에러 발생");
@@ -756,19 +822,17 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
             }
 
             else if (msg === "/저장") {
-               replier.reply(save(SDCARD, FILENAME, reservations));
+               replier.reply(save(reservations));
+               replier.reply(saveRANKING());
             }
 
             else if (msg === "/불러오기") {
-               replier.reply(read(SDCARD, FILENAME));
+               replier.reply(read());
+               replier.reply(loadRANKING());
             }
 
             else if (msg === "/정보") {
                replier.reply("시간 : " + currentHour + "\n예약자 : " + reservationUser + "\n사용자 : " + currentLoginUser);
-            }
-
-            else if(msg === "/강제 로그아웃"){
-               replier.reply(stopNico(currentLoginUser));
             }
 
             // 종료
@@ -783,6 +847,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
                   replier.reply(e);
                }
             }
+
          }
       }
    } catch(e){
@@ -793,25 +858,28 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
 function onStartCompile() {
    try {
       clearInterval(startTimer);
-      save(SDCARD, FILENAME, reservations);
+      save(reservations);
+      saveRANKING();
    } catch (e) {}
 }
 
-function init(is) {
-   load_command(SDCARD, FILENAME_LOGOUT, LOGOUT);
+function init(is){
    count = 0;
    reservations = new Array();
+   frequencys = new Array();
    for (var i = 0; i < 24; i++) {
       reservations[i] = new reservations_f();
-      reservations[i].name = "None";
+      reservations[i].name = EMPTY;
       reservations[i].status = 0;
    }
    currentHour = new Date().getHours();
    currentDay = new Date().getDate();
-   currentLoginUser = "None";
+   currentLoginUser = EMPTY;
 
    if (is === true) {
-      read(SDCARD, FILENAME)
+      load_command();
+      read();
+      loadRANKING();
       for (var i in reservations) {
          if (reservations[i].status === 1) {
             currentLoginUser = reservations[i].name;
@@ -820,6 +888,6 @@ function init(is) {
       }
       reservationUser = reservations[currentHour].name;
    } else {
-      reservationUser = "None";
+      reservationUser = EMPTY;
    }
 }
