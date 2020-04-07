@@ -1,6 +1,6 @@
 const scriptName="Nico.js";
 const ROOMS = "PNN 공부합시다"; //방 이름
-const VER = "ver 1.7"; // 버전
+const VER = "ver 1.7.1"; // 버전
 const TIME = 60 * 5; //알람 주기
 const MANAGER = "김재윤";
 const EMPTY = "None";
@@ -53,6 +53,7 @@ const COMMAND_LIST = new Array(
    COMMAND + " 삭제",
 );
 
+var day; // 현재 시간 정보
 var currentDay; // 현재 날짜
 var currentHour; // 현재 시간
 var currentLoginUser; // 현재 사용중인 유저
@@ -455,7 +456,20 @@ function todayRANKING() {
          let hour = parseInt(frequencys[i].time/3600);
          let min = parseInt((frequencys[i].time%3600)/60);
          let sec = frequencys[i].time%60;
-         text += (parseInt(i) + 1) + "위\t" + frequencys[i].username + "\t" + hour + ":" + min + ":" + sec + "\n";
+         let name = frequencys[i].username;
+         if(name.length < 3){
+            name = "  " + name;
+         }
+         if(String(hour).length < 2){
+            hour = '0' + String(hour);
+         }
+         if(String(min).length < 2){
+            min = '0' + String(min);
+         }
+         if(String(sec).length < 2){
+            sec = '0' + String(sec);
+         }
+         text += (parseInt(i) + 1) + "위\t" + name + "\t" + hour + ":" + min + ":" + sec + "\n";
       }
       return text.slice(0, -1);
    }
@@ -501,7 +515,20 @@ function listRANKING(){
          let hour = parseInt(fre.time/3600);
          let min = parseInt((fre.time%3600)/60);
          let sec = fre.time%60;
-         text += "[" + fre.username + "] " + hour + ":" + min + ":" + sec + "\n";
+         let name = fre.username;
+         if(name.length < 3){
+            name = "   " + name;
+         }
+         if(String(hour).length < 2){
+            hour = '0' + String(hour);
+         }
+         if(String(min).length < 2){
+            min = '0' + String(min);
+         }
+         if(String(sec).length < 2){
+            sec = '0' + String(sec);
+         }
+         text += "[" + name + "] " + hour + ":" + min + ":" + sec + "\n";
       }
       return text.slice(0, -1);
    }
@@ -565,29 +592,34 @@ function loadRANKING() {
    }
 }
 
+//재시작
+function restartApi(app_name){
+   Api.off(app_name);
+   Api.reload(app_name);
+   Api.on(app_name);
+}
+
 function interval(replier) { //
    init(true);
    flag = false;
 
    startTimer = setInterval(function () {
-      let day = new Date();
+      day = new Date();
       countRANKING();
 
-      if (currentDay !== day.getDate()) { // 날짜 변경을 확인하여 정보 초기화 및 재시작
+      if (currentDay != day.getDate()) { // 날짜 변경을 확인하여 정보 초기화 및 재시작
          replier.reply(todayRANKING());
-         replier.reply("[" + day.getMonth() + 1 + "/" + day.getDate() + "]\n새로운 예약리스트를 진행합니다.");
+         replier.reply("[" + (day.getMonth() + 1) + "/" + day.getDate() + "]\n새로운 예약리스트를 진행합니다.");
          init(false);
-         save(reservations);
-         saveRANKING();
-         save_command("", false);
+         restartApi(scriptName);
       }
 
-      if (currentHour !== day.getHours()) {
+      if (currentHour != day.getHours()) {
          currentHour = day.getHours();
          reservationUser = reservations[currentHour].name;
          timeOut(currentHour); //마감 확인
 
-         if (currentLoginUser !== EMPTY && reservationUser === EMPTY) { //자동 시간 연장
+         if (currentLoginUser != EMPTY && reservationUser == EMPTY) { //자동 시간 연장
             reserv(currentLoginUser, currentHour, currentHour);
             replier.reply("[" + currentLoginUser + "]님의 예약 시간을 1시간 연장했습니다.");
          }
@@ -595,14 +627,14 @@ function interval(replier) { //
          save(reservations); //정보 저장
       }
 
-      if (currentLoginUser !== EMPTY && reservationUser !== EMPTY && currentLoginUser !== reservationUser) { //독촉장
+      if (currentLoginUser != EMPTY && reservationUser != EMPTY && currentLoginUser != reservationUser) { //독촉장
          if (count >= TIME) {
             count = 0;
             replier.reply("[알림]\n다음 예약자[" + reservationUser + "]님이 기다리고 있습니다.");
          }
          count++;
       } else {
-         if (count !== 0) {
+         if (count != 0) {
             count = 0;
          }
       }
@@ -806,9 +838,7 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
             else if (msg === "/초기화") {
                replier.reply("초기화를 진행합니다.");
                init(false);
-               save(reservations);
-               saveRANKING();
-               save_command("", false);
+               restartApi(scriptName);
             }
 
             else if (msg === "/명령어 초기화"){
@@ -838,11 +868,9 @@ function response(room, msg, sender, isGroupChat, replier, ImageDB, packageName,
             // 종료
             else if (msg === "/종료") {
                try {
-                  clearInterval(startTimer);
-                  init(false);
+                  replier.reply("종료합니다.");
                   Api.off(scriptName);
                   Api.reload(scriptName);
-                  replier.reply("정상적으로 종료하였습니다.");
                } catch (e) {
                   replier.reply(e);
                }
@@ -860,13 +888,15 @@ function onStartCompile() {
       clearInterval(startTimer);
       save(reservations);
       saveRANKING();
+      save_command("", false);
    } catch (e) {}
 }
 
 function init(is){
+   day = new Date();
    count = 0;
-   reservations = new Array();
    frequencys = new Array();
+   reservations = new Array();
    for (var i = 0; i < 24; i++) {
       reservations[i] = new reservations_f();
       reservations[i].name = EMPTY;
@@ -877,9 +907,9 @@ function init(is){
    currentLoginUser = EMPTY;
 
    if (is === true) {
-      load_command();
       read();
       loadRANKING();
+      load_command();
       for (var i in reservations) {
          if (reservations[i].status === 1) {
             currentLoginUser = reservations[i].name;
